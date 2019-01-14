@@ -1,0 +1,12 @@
+{
+    "BATCH_SIZE": "32",
+    "CONTINUE": "False",
+    "EPOCHS": "1",
+    "acc_list": "[0.7935675182481752]",
+    "depth": "1",
+    "feed_forward.__name__": "LeNet",
+    "keep_prob_value": "0.5",
+    "learning_rate": "0.001",
+    "loss_list": "[1.1614199]",
+    "train_acc_list": "[0.8638166973321068]"
+}
