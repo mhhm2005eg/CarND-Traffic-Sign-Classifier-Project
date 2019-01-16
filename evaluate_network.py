@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import cv2
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.utils import shuffle
 
 EPOCHS = 20
 BATCH_SIZE = 32
@@ -29,8 +30,9 @@ loss_list = [1]
 CONTINUE = False
 TRAIN = True
 TEST = True
-model_folder = "2019_01_14-14_15_16"
+DISPLAY_IMAGES = True
 
+BATCH_IMAGES = False
 def LeNet(x, conv_keep_prob=1, fc_keep_prob=1, depth=3, conv1_depth=6, conv2_depth=16, filter_size=5):
     # Arguments used for tf.truncated_normal, randomly defines variables for the weights and biases for each layer
     mu = 0
@@ -100,7 +102,6 @@ def LeNet(x, conv_keep_prob=1, fc_keep_prob=1, depth=3, conv1_depth=6, conv2_dep
     return logits
 
 
-
 def outputFeatureMap(image_input, tf_activation, activation_min=-1, activation_max=-1, plt_num=1):
     # Here make sure to preprocess your image_input in a way your network expects
     # with size, normalization, ect if needed
@@ -123,8 +124,69 @@ def outputFeatureMap(image_input, tf_activation, activation_min=-1, activation_m
             plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", vmin=activation_min, cmap="gray")
         else:
             plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", cmap="gray")
+    if DISPLAY_IMAGES:
+        #pass
+        plt.show()
+
+def get_random_images():
+    training_file = "./traffic_signs_data/train.p"
+    validation_file = "./traffic_signs_data/valid.p"
+    testing_file = "./traffic_signs_data/test.p"
+
+    with open(training_file, mode='rb') as f:
+        train = pickle.load(f)
+    with open(validation_file, mode='rb') as f:
+        valid = pickle.load(f)
+    with open(testing_file, mode='rb') as f:
+        test = pickle.load(f)
+
+    X_train, y_train = train['features'], train['labels']
+    X_valid, y_valid = valid['features'], valid['labels']
+    X_test, y_test = test['features'], test['labels']
+    X_train, y_train = shuffle(X_train, y_train)
+    print(y_valid.shape)
+    #print(y_train[y_train == 8][8])
+    x_8 = X_train[np.where(y_train == 8)[0][8]]
+    plt.imshow(x_8)
+    plt.show()
+
+    x_15 = X_train[np.where(y_train == 15)[0][15]]
+    plt.imshow(x_15)
+    plt.show()
+
+    x_12 = X_train[np.where(y_train == 12)[0][12]]
+    plt.imshow(x_12)
+    plt.show()
+
+    x_25 = X_train[np.where(y_train == 25)[0][25]]
+    plt.imshow(x_25)
+    plt.show()
+
+    x_16 = X_train[np.where(y_train == 16)[0][16]]
+    plt.imshow(x_16)
+    plt.show()
+
+def get_images():
+    training_file = "./traffic_signs_data/train.p"
+    validation_file = "./traffic_signs_data/valid.p"
+    testing_file = "./traffic_signs_data/test.p"
+
+    with open(training_file, mode='rb') as f:
+        train = pickle.load(f)
+    with open(validation_file, mode='rb') as f:
+        valid = pickle.load(f)
+    with open(testing_file, mode='rb') as f:
+        test = pickle.load(f)
+
+    X_train, y_train = train['features'], train['labels']
+    #X_valid, y_valid = valid['features'], valid['labels']
+    #X_test, y_test = test['features'], test['labels']
+    X_train, y_train = shuffle(X_train, y_train)
+
+    return  X_train, y_train
 
 
+#get_images()
 sess = tf.InteractiveSession()
 sess.as_default()
 #tf.reset_default_graph()
@@ -141,7 +203,9 @@ logit= LeNet(x, conv_keep_prob, fc_keep_prob, depth=image_depth, conv1_depth=con
 op = sess.graph.get_operations()
 print([m.values() for m in op][1])
 
-
+#model_folder = "2019_01_14-20_58_10"
+#model_folder = "2019_01_14-12_03_04"
+model_folder = "2019_01_16-00_22_43"
 #sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 #saver = tf.train.import_meta_graph('./00_out/'+model_folder+'/LeNet.meta')
@@ -149,38 +213,86 @@ saver = tf.train.Saver()
 saver.restore(sess, './00_out/' + model_folder + '/LeNet')
 #saver.restore(sess, './00_out/2019_01_14-12_03_04/LeNet')
 
-images = find_files("./01_test_images", ".png")
+if BATCH_IMAGES:
+    images, labels_n = get_images()
+else:
+    images = find_files("./01_test_images", ".png")
+    labels_n = [8, 15, 12, 25, 16]
+    #labels_n = [8, 15, 12, 25, 16, 8, 15, 12, 25, 16]
 
-op = sess.graph.get_operations()
-print([m.values() for m in op][1])
-
-labels = [8, 15, 12, 25, 16]
+#get_random_images()
 encoder = LabelBinarizer()
 encoder.fit(range(43))
-labels = encoder.transform(labels)
+labels = encoder.transform(labels_n)
 
 
 img_gray_array = np.ndarray
 i = -1
+classification_list = []
+error_list = []
+#print(images.shape)
+
 for image_path in images:
+
     i+=1
-    img_rgb = mpimg.imread(image_path)
+    if BATCH_IMAGES:
+        img_rgb = image_path
+    else:
+        print("File: " + image_path)
+        img_rgb = cv2.imread(image_path)
+    #print(np.max(img_rgb), np.min(img_rgb))
     img_gray = np.sum(img_rgb/3, axis=2, keepdims=True)
-    #print(img_gray.shape)
+    #img_gray = cv2.equalizeHist(img_gray.astype(np.uint8))
+    # create a CLAHE object (Arguments are optional).
+    clahe = cv2.createCLAHE(tileGridSize=(2, 2), clipLimit=200.0)
+
     img_gray = cv2.resize(img_gray, (32, 32), interpolation=cv2.INTER_AREA)
+    X_EqualizeHist = cv2.equalizeHist(img_gray.astype(np.uint8))
+    X_EqualizeHist_adaptive = clahe.apply(img_gray.astype(np.uint16))
+
     img_gray = np.reshape(img_gray, (1, 32, 32, 1))
 
-    #print(img_gray.shape)
+    print(X_EqualizeHist.shape)
 
-    #plt.imshow(img_gray[0,:, :,0])
-    #plt.show()
     img = (img_gray - 128)/128
+    if DISPLAY_IMAGES:
+        #plt.imshow(img[0,:, :,0], "gray")
+        #plt.figure(figsize=(1,3))
+        _ ,ax = plt.subplots(1, 3)
+        #ax[0].imshow(cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB))
+        #ax[0].set_title("rgb_image", fontsize=20)
+        ax[1].imshow(img_gray[0,:, :,0], "gray")
+        ax[1].set_title("gray", fontsize=20)
+        ax[2].imshow(X_EqualizeHist, "gray")
+        ax[2].set_title("X_EqualizeHist", fontsize=20)
+        ax[0].imshow(X_EqualizeHist_adaptive, "gray")
+        ax[0].set_title("X_EqualizeHist_adaptive", fontsize=20)
+        #
+        plt.show()
     #img_gray_array[0] = img_gray
     #saver.restore(sess, './00_out/2019_01_13-13_52_52/LeNet')
 
     #sess.run(LeNet(x, conv_keep_prob, fc_keep_prob, depth=image_depth, conv1_depth=conv1_depth_val, conv2_depth=conv2_depth_val, filter_size=conv_filter_size),
              #feed_dict={x:img, fc_keep_prob:fc_keep_prob_value, conv_keep_prob:conv_keep_prob_value})
-    logit_val = sess.run(logit, feed_dict={x:img, fc_keep_prob:fc_keep_prob_value, conv_keep_prob:conv_keep_prob_value})
-    class_val = sess.run(tf.nn.softmax_cross_entropy_with_logits(logits=logit_val, labels=labels[i]))
-    print(class_val)
+    logit_val = sess.run(logit, feed_dict={x:img, fc_keep_prob:1, conv_keep_prob:1})
+    class_err = sess.run(tf.nn.softmax_cross_entropy_with_logits(logits=logit_val, labels=labels[i]))
+    class_expectation = sess.run(tf.nn.softmax(logit_val))
+    classification = np.argmax(np.absolute(class_expectation))
+    if not BATCH_IMAGES:
+        print("*"*20)
+        print("classified as: %d" %classification)
+        print("Should  be   : %d" %labels_n[i])
+        print("Cross entropy : " + str(class_err[0]) )
+        print("-"*20)
+
+    classification_list.append(classification)
+    error_list.append(class_err[0])
     outputFeatureMap(img_gray, conv1)
+    #print(logit_val)
+
+#overall_error = sess.run(tf.nn.sigmoid_cross_entropy_with_logits(logits=logit_val, labels=labels))
+
+print("Classifications  : " + str(classification_list))
+print("Labels           : " + str(labels_n))
+print("COST             : " + str(error_list))
+#print("Overall error %.5f" %overall_error)

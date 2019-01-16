@@ -29,7 +29,7 @@ X_valid = None
 y_valid = None
 X_test = None
 y_test = None
-EPOCHS = 20
+EPOCHS = 50
 BATCH_SIZE = 32
 learning_rate = 0.001
 feed_forward = LeNet  # feed_forward_#LeNet_1#LeNet
@@ -49,17 +49,17 @@ TRAIN = True
 TEST = True
 
 Data_Augmentation_EqualizeHist = True
-Data_Augmentation_Noise = True
+Data_Augmentation_Noise = False
 Data_Augmentation_Blur = False
 Data_Augmentation_Rotate = False
 DISPLAY_DATA_SET_HISTOGRAM = False
 Evaluate_NW = True
-
+clipLimit = 50
 
 def main():
     global X_train, y_train, X_valid, y_valid, X_test, y_test, EPOCHS, BATCH_SIZE, learning_rate, feed_forward,\
         fc_keep_prob_value, conv_keep_prob_value, saver, CONTINUE, conv1_depth_val, conv2_depth_val, conv_filter_size,\
-    available_training_data_set, image_depth, acc_list, train_acc_list, loss_list, TRAIN, TEST
+    available_training_data_set, image_depth, acc_list, train_acc_list, loss_list, TRAIN, TEST, max_accuracy, max_accuracy_epoch
 
 
     global accuracy_operation, x, y, conv_keep_prob, fc_keep_prob
@@ -115,14 +115,29 @@ def main():
         X_test = np.sum(X_test/3, axis=3, keepdims=True)
         #Histograms Equalization in OpenCV
         if Data_Augmentation_EqualizeHist:
-            X_new = np.zeros_like(X_train)
-            for i in range(X_train.shape[0]):
-                X_new[i, :, :, 0] = cv2.equalizeHist(X_train[i].astype(np.uint8))
-            add_images(X_new)
-            for i in range(X_valid.shape[0]):
-                X_valid[i, :, :, 0] = cv2.equalizeHist(X_valid[i].astype(np.uint8))
-            for i in range(X_test.shape[0]):
-                X_test[i, :, :, 0] = cv2.equalizeHist(X_test[i].astype(np.uint8))
+            if True:
+                X_EqualizeHist = np.zeros_like(X_train)
+                for i in range(X_train.shape[0]):
+                    X_EqualizeHist[i, :, :, 0] = cv2.equalizeHist(X_train[i].astype(np.uint8))
+                #add_images(X_EqualizeHist)
+                X_train = X_EqualizeHist
+
+                for i in range(X_valid.shape[0]):
+                    X_valid[i, :, :, 0] = cv2.equalizeHist(X_valid[i].astype(np.uint8))
+                for i in range(X_test.shape[0]):
+                    X_test[i, :, :, 0] = cv2.equalizeHist(X_test[i].astype(np.uint8))
+            else:
+                clahe = cv2.createCLAHE(tileGridSize=(2, 2), clipLimit=clipLimit)
+                X_EqualizeHist = np.zeros_like(X_train)
+                for i in range(X_train.shape[0]):
+                    X_EqualizeHist[i, :, :, 0] = clahe.apply(X_train[i].astype(np.uint16))
+                #add_images(X_EqualizeHist)
+                X_train = X_EqualizeHist
+
+                for i in range(X_valid.shape[0]):
+                    X_valid[i, :, :, 0] = clahe.apply(X_valid[i].astype(np.uint16))
+                for i in range(X_test.shape[0]):
+                    X_test[i, :, :, 0] = clahe.apply(X_test[i].astype(np.uint16))
 
     x = tf.placeholder(tf.float32, (None, 32, 32, image_depth))
     y = tf.placeholder(tf.int32, (None, 43))
@@ -255,6 +270,7 @@ def main():
                 train_acc_list.append(training_accuracy)
                 print()
 
+
             sub_folder_name = get_date_time()
             fig0 = plt.figure(0)
             fig0.clf()
@@ -263,7 +279,9 @@ def main():
             plt.grid(True)
             plt.legend()
             annot_max(range(len(acc_list)),acc_list)
-            print("Max accuracy %.3f at Epoch %d" %(max(acc_list), range(len(acc_list))[np.argmax(acc_list)]))
+            max_accuracy = max(acc_list)
+            max_accuracy_epoch = range(len(acc_list))[np.argmax(acc_list)]
+            print("Max accuracy %.3f at Epoch %d" %(max_accuracy, max_accuracy_epoch))
             arr = convert_figure_to_array(fig0)
             store_image(arr, "validation_accuracy", out_dir + "/" + sub_folder_name)
 
@@ -277,20 +295,24 @@ def main():
             arr = convert_figure_to_array(fig0)
             store_image(arr, "loss", out_dir + "/" + sub_folder_name)
 
+            global test_accuracy
+            test_accuracy = 0
+
             data_list = ["EPOCHS", "BATCH_SIZE", "learning_rate", "feed_forward.__name__",
                          "fc_keep_prob_value", "conv_keep_prob_value", "CONTINUE", "image_depth",
-                         "conv1_depth_val", "conv2_depth_val", "conv_filter_size",
+                         "conv1_depth_val", "conv2_depth_val", "conv_filter_size","test_accuracy",
+                         "max_accuracy", "max_accuracy_epoch", "clipLimit",
                          "acc_list", "train_acc_list", "loss_list"]
             file_name =  out_dir + "/" + sub_folder_name + "/" + "configs"
             save_variables(file_name, data_list)
 
             saver.save(sess, "./" + out_dir + "/" + sub_folder_name + '/' + feed_forward.__name__)
             print("Model saved")
+            if TEST:
+                print("Testing ...")
+                test_accuracy = evaluate(X_test, y_test)
+                print("Testing Accuracy = {:.3f}".format(test_accuracy))
 
-        if TEST:
-            print("Testing ...")
-            test_accuracy = evaluate(X_test, y_test)
-            print("Testing Accuracy = {:.3f}".format(test_accuracy))
 
 
 def evaluate(X_data, y_data):
